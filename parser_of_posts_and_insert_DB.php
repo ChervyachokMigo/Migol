@@ -1,14 +1,15 @@
 <html>
 <body>
 	<?php
+		//подключаем библиотеку для удобства парсинга
 		require ("phpQuery-onefile.php");
+		//настройки сервера
 		mb_internal_encoding("UTF-8");
 		mb_regex_encoding("UTF-8");
 		setlocale(LC_ALL, 'ru_RU', 'ru_RU.UTF-8', 'ru', 'russian');  
 		date_default_timezone_set('Europe/Moscow');
 
-		$files1 = scandir("CherveThreads/");
-		$files1 = array_diff($files1, [".", "..", "css", "img", "js", "makaba", "theme",""]);
+		//настройки соединения к БД
 		$servername = "localhost";
 		$username = "root";
 		$password = "";
@@ -21,49 +22,68 @@
 		  die("Connection failed: " . $conn->connect_error);
 		}
 
-		//игнорирование ссылок
-		$ignoreLinks = file_get_contents ( "ignoreLinks.txt" );
-		$skip_links_array = array();
-		foreach(preg_split("/((\r?\n)|(\r\n?))/", $ignoreLinks) as $skip_Link){
-			$skip_links_array[] = trim($skip_Link);
+		//Сканирование папки со страницами
+		$files1 = scandir("CherveThreads/");
+		$files1 = array_diff($files1, [".", "..", "css", "img", "js", "makaba", "theme",""]);
+		//игнорирование страниц
+		$ignoreHTMLS = file_get_contents ( "ignoreHTMLS.txt" );
+		$skip_pages_array = array();
+		foreach(preg_split("/((\r?\n)|(\r\n?))/", $ignoreHTMLS) as $skip_Link){
+			$skip_pages_array[] = trim($skip_Link);
 		}
-		$files1 = array_diff($files1, $skip_links_array);
+		$files1 = array_diff($files1, $skip_pages_array);
 
+		//массив для замены месяца в числовой вид
 		$date_replace_month = array(
 			"Янв" => "01", "Фев" => "02", "Мар" => "03", "Апр" => "04", "Май" => "05", "Июн" => "06", "Июл" => "07", "Авг" => "08", "Сен" => "09", "Окт" => "10", "Ноя" => "11", "Дек" => "12", 
 			"янв" => "01", "фев" => "02", "мар" => "03", "апр" => "04", "май" => "05", "июн" => "06","июл" => "07", "авг" => "08", "сен" => "09", "окт" => "10", "ноя" => "11", "дек" => "12"
 		);
 
+		//айди поста в базе
+		$min_auto_increment = 1;
+		$auto_increment = 1;
+
+		//начало парсинга
 		foreach($files1 as $findfile){
-			$pathfile = "CherveThreads/".$findfile;
-			$file_content = file_get_contents ( $pathfile );
-			$documentQuery = phpQuery::newDocumentHTML($file_content);
+			//Задание начальных переменных цикла
 			$array_all_posts = array();
 			$mysql_post_content_values = array();
 			$mysql_post_images_values = array();
-			$mysql_threads_names = "";
-			$finded=0;
-			$id_post = 0;
+			$mysql_post_ids_values = array();
+			$mysql_post_dates_values = array();
 			$sqldata_post_content = "";
 			$sqldata_post_images = "";
-			$id_thread = 0;
+			$sqldata_post_ids = "";
+			$sqldata_post_dates = "";
+			$sqldata_threads_names = "";
 			$post_content = array();
+			$id_post = 0;
+			$id_thread = 0;
 			$post_date = "";
-			$page_type = 0;				
+			$page_type = 0;
+			$finded=0;			
 
+			//считываем документ
+			$pathfile = "CherveThreads/".$findfile;
+			$file_content = file_get_contents ( $pathfile );
+			$documentQuery = phpQuery::newDocumentHTML($file_content);
+			//получаем название треда
 			$path_parts = pathinfo($pathfile);
 			$threadname = trim(str_replace(["_Архивач", "_m2ch", "_Двач_old_1", "_Двач_old_2", "_Двач_new"], "", $path_parts['filename']  ));
-
-			//echo "<div>$findfile</div>";
+			//печатаем название на экране
 			echo "<div>$threadname</div>";
+			//присваиваем минимальное значение для индекса постов в базе этого треда с максимального значения индекса постов предыдущего обработанного треда
+			$min_auto_increment = $auto_increment;
 
+			//определяем условием тип страницы
+			//если файл - с http://arhivach.net
 			if (strpos ($pathfile,'_Архивач')){
 				//получить тред ид
 				$id_thread = $documentQuery->find('.post:first')->attr("postid");
-				//полный пост
+				//обрабатываем посты треда
 				$post_content = $documentQuery->find('.post');
 				foreach ($post_content as $row) {
-					//получить айди поста
+					//получаем айди поста
 					$id_post=pq($row)->attr("postid");
 					if ($id_post && $id_post != $id_thread) {
 						//записать сообщение в общий массив
@@ -101,9 +121,8 @@
 								//записать дату в общий массив
 								$array_all_posts[$id_thread][$id_post]['post_time'] = $post_date_month."/".$post_date_tmp['day']."/".$post_date_tmp['year']." ".$post_date_tmp['hour'].":".$post_date_tmp['minute'].":".$post_date_tmp['second'];
 							}
-							
-							
 						}
+
 						//получить прикрепленные картинки
 						if (pq($row)->find('.post_image_block') != ""){
 							$images_url = array();
@@ -118,6 +137,7 @@
 						    	$pq_tmp = pq($value);
 						    	$images_names[] = $pq_tmp->text();
 						    }
+						    //записать картинки в общий массив
 						    for($i=0;$i<count($images_url);$i++){
 						    	$array_all_posts[$id_thread][$id_post]['post_images'][] = ['image_url'=>$images_url[$i],'image_names'=>$images_names[$i]];
 						    }
@@ -128,6 +148,7 @@
 				$finded = 1;
 			}
 
+			//если файл - с http://m2ch.hk
 			if (strpos ($pathfile,'_m2ch')){
 				//получить тред ид
 				$id_thread = $documentQuery->find('.thread')->attr("id");
@@ -135,10 +156,10 @@
 				$warn_message = $documentQuery->find('.warn');
 				preg_match("/Это копия, сохраненная (.*) года\./",$warn_message,$warn_date);
 				$post_date_year = substr(date_parse_from_format("d M Y", $warn_date[1])['year'],2);
-				//полный пост
+				//обрабатываем посты треда
 				$post_content = $documentQuery->find('.reply');
 				foreach ($post_content as $row) {
-					//получить айди поста
+					//получаем айди поста
 					$id_post=pq($row)->attr("id");
 					if ($id_post && $id_post != $id_thread) {
 						//записать сообщение в общий массив
@@ -178,8 +199,9 @@
 				$finded = 2;
 			}
 
+			//если файл - с https://2ch.hk/fag/arch
 			if (strpos ($pathfile,'_Двач')){
-
+				//получаем айди треда и содержимое постов в зависимости от типа страницы
 				if (strpos ($pathfile,'_old')){
 					if (strpos ($pathfile,'old_1')) $page_type = 1;
 					if (strpos ($pathfile,'old_2')) $page_type = 2;
@@ -191,8 +213,9 @@
 					$id_thread = $documentQuery->find('.thread__oppost .post_type_oppost')->attr("data-num");
 					$post_content = $documentQuery->find('.thread__post');
 				}
-
+				//обрабатываем посты треда
 				foreach ($post_content as $row) {
+					//получаем айди поста
 					$id_post=pq($row)->find("div:first")->attr("data-num");
 					if ($id_post && $id_post != $id_thread) {
 						//записать сообщение в общий массив и получить дату согласно типу страницы
@@ -213,6 +236,7 @@
 						if ($post_date_tmp['month']<10) $post_date_tmp['month']="0".intval($post_date_tmp['month']);
 						//записать дату в общий массив
 						$array_all_posts[$id_thread][$id_post]['post_time'] = $post_date_tmp['month']."/".$post_date_tmp['day']."/".$post_date_tmp['year']." ".$post_date_tmp['hour'].":".$post_date_tmp['minute'].":".$post_date_tmp['second'];
+
 						//получить прикрепленные картинки
 						$images_url = array();
 						$images_names = array();
@@ -238,6 +262,7 @@
 							    }
 							}
 						}
+						//записать картинки в общий массив
 						for($i=0;$i<count($images_url);$i++){
 					    	$array_all_posts[$id_thread][$id_post]['post_images'][] = ['image_url'=>$images_url[$i],'image_names'=>$images_names[$i]];
 					    }
@@ -246,7 +271,7 @@
 				$finded = 3;
 			}
 
-			//если иной файл
+			//если иной файл выводим ошибку и продолжаем со следующего файла
 			if ($finded ==0){
 				echo "<div><b>".$pathfile." ОШИБКА ОШИБКА ОШИБКА ОШИБКА ОШИБКА ОШИБКА ОШИБКА ОШИБКА ОШИБКА ОШИБКА ОШИБКА ОШИБКА ОШИБКА </b></div>";
 				file_put_contents("mysql_error_files.txt", $pathfile."\r\n", FILE_APPEND | LOCK_EX);
@@ -254,83 +279,138 @@
 				continue;
 			}
 			
-			//запись в базу
+			//подготавливаем данные для записи в базу
+			//айди треда
 			$id_thread = intval($id_thread);
+			if ($id_thread>16777214) $id_thread = 16777214;
+			//обрабатываем данные с каждого поста
 			foreach($array_all_posts[$id_thread] as $post_id => $post_content){
-				
-				$post_content['post_message']="'".mysqli_real_escape_string($conn, $post_content['post_message'])."'";
+				//айди поста
 				$post_id = intval($post_id);
+				if ($post_id>16777214) $post_id = 16777214;
+				//сообщение поста
+				$post_content['post_message']="'".mysqli_real_escape_string($conn, $post_content['post_message'])."'";
+				//дата поста
 				$post_content['post_time']="'".date('Y-m-d G:i:s', strtotime($post_content['post_time']))."'";
 				if (!$post_content['post_time']) {
 					echo $post_content['post_time'];
 					echo $post_content['post_message']; 
 					exit("error");
 				}
-
+				
+				//формируем блоки данных
+				//блоки данных картинок
 				if (@$post_content['post_images']){
 					foreach ($post_content['post_images'] as $image_links) {
 						$image_links['image_url']="'".mysqli_real_escape_string($conn, $image_links['image_url'])."'";
 						$image_links['image_names']="'".mysqli_real_escape_string($conn, $image_links['image_names'])."'";
-						$mysql_post_images_values[] = "($id_thread, $post_id, ".$image_links['image_url'].", ".$image_links['image_names'].")";
+						$mysql_post_images_values[] = "($auto_increment, ".$image_links['image_url'].", ".$image_links['image_names'].")";
 					}
 				}
-				
-				$mysql_post_content_values[] = "($id_thread, $post_id, ".$post_content['post_message'].", ".$post_content['post_time'].")";
+				//блоки данных текста постов
+				$mysql_post_content_values[] = "($auto_increment, ".$post_content['post_message'].")";
+				//блоки данных айди постов
+				$mysql_post_ids_values[] = "($auto_increment, $id_thread, $post_id)";
+				//блоки данных даты постов
+				$mysql_post_dates_values[] = "($auto_increment, ".$post_content['post_time'].")";
+				//увеличиваем виртуальный индекс поста для базы
+				$auto_increment++;
 			}
-
+			//обрабатываем название треда
 			$threadname = "'".mysqli_real_escape_string($conn, $threadname)."'";
-			$mysql_threads_names = "($id_thread, $threadname)";
 			
+
+			//запись в базу
+			//если в треде есть посты
 			if (count($mysql_post_content_values)>0){
+				//данные названия треда для вставки в базу
+				$sqldata_threads_names = "($id_thread, $threadname)";
+				$sql_threads_names = "INSERT INTO threads_name(thread_id, thread_name) VALUES $sqldata_threads_names;";
+				//данные текста постов для вставки в базу и запрос
 				$sqldata_post_content .= implode(',', $mysql_post_content_values);
-				$sql = "INSERT INTO posts_content(thread_id, post_id, post_content, post_date) VALUES $sqldata_post_content;";
-				$sql3 = "INSERT INTO threads_name(thread_id, thread_name) VALUES $mysql_threads_names;";
-				if ($conn->query($sql) === false) {
+				$sql_posts_contents = "INSERT INTO posts_content(index_post, post_content) VALUES $sqldata_post_content;";
+				//данные айди постов для вставки в базу и запрос
+				$sqldata_post_ids .= implode(',', $mysql_post_ids_values);
+				$sql_posts_ids = "INSERT INTO posts_ids(index_post, thread_id, post_id) VALUES $sqldata_post_ids;";
+				//данные даты постов для вставки в базу и запрос
+				$sqldata_post_dates .= implode(',', $mysql_post_dates_values);
+				$sql_posts_dates = "INSERT INTO posts_data(index_post, post_date) VALUES $sqldata_post_dates;";
+				
+				//выполняем вставки в базу и проверяем на ошибки
+				//пробуем вставить название треда в базу и если проблемы с названием треда то пишем ошибки
+				if ($conn->query($sql_threads_names) === false) {
 					file_put_contents("mysql_error_files.txt", $pathfile."\r\n", FILE_APPEND | LOCK_EX);
 					file_put_contents("mysql_error_files.txt", " - Error: " . $conn->error . "\r\n", FILE_APPEND | LOCK_EX);
-					echo "<p>Error: " . $sql . "<br>" . $conn->error . "</p>";
-				}
-				if ($conn->query($sql3) === false) {
-					file_put_contents("mysql_error_files.txt", $pathfile."\r\n", FILE_APPEND | LOCK_EX);
-					file_put_contents("mysql_error_files.txt", " - Error: " . $conn->error . "\r\n", FILE_APPEND | LOCK_EX);
-					echo "<p>Error: " . $sql3 . "<br>" . $conn->error . "</p>";
-				}
-				if (count($mysql_post_images_values)>0){
-					$sqldata_post_images .= implode(',', $mysql_post_images_values);
-					$sql2 = "INSERT INTO posts_images(thread_id, post_id, image_url, image_name) VALUES $sqldata_post_images;";
-					if ($conn->query($sql2) === false) {
+					echo "<p>Error: " . $sql_threads_names . "<br>" . $conn->error . "</p>";
+					echo "<p>Skipping thread</p>";
+				//если нет проблем с названием треда
+				} else {
+					//пробуем вставить тексты постов в базу и если проблемы с названием треда то пишем ошибки
+					if ($conn->query($sql_posts_contents) === false) {
 						file_put_contents("mysql_error_files.txt", $pathfile."\r\n", FILE_APPEND | LOCK_EX);
 						file_put_contents("mysql_error_files.txt", " - Error: " . $conn->error . "\r\n", FILE_APPEND | LOCK_EX);
-						echo "<p>Error: " . $sql2 . "<br>" . $conn->error . "</p>";
+						echo "<p>Error: " . $sql_posts_contents . "<br>" . $conn->error . "</p>";
 					}
-				}else{
-					echo "<p>Error: no images</p>";
-					file_put_contents("mysql_error_files.txt", $pathfile."\r\n", FILE_APPEND | LOCK_EX);
-					file_put_contents("mysql_error_files.txt", " - Error: no images\r\n", FILE_APPEND | LOCK_EX);
+					//пробуем вставить даты постов в базу и если проблемы с названием треда то пишем ошибки
+					if ($conn->query($sql_posts_dates) === false) {
+						file_put_contents("mysql_error_files.txt", $pathfile."\r\n", FILE_APPEND | LOCK_EX);
+						file_put_contents("mysql_error_files.txt", " - Error: " . $conn->error . "\r\n", FILE_APPEND | LOCK_EX);
+						echo "<p>Error: " . $sql_posts_dates . "<br>" . $conn->error . "</p>";
+					}
+					//пробуем вставить айди постов в базу и если проблемы с названием треда то пишем ошибки
+					if ($conn->query($sql_posts_ids) === false) {
+						file_put_contents("mysql_error_files.txt", $pathfile."\r\n", FILE_APPEND | LOCK_EX);
+						file_put_contents("mysql_error_files.txt", " - Error: " . $conn->error . "\r\n", FILE_APPEND | LOCK_EX);
+						echo "<p>Error: " . $sql_posts_ids . "<br>" . $conn->error . "</p>";
+					}
+					//если в треде есть картинки
+					if (count($mysql_post_images_values)>0){
+						//преобразуем данные и формируем запрос вставки картинок в базу
+						$sqldata_post_images .= implode(',', $mysql_post_images_values);
+						$sql_posts_images = "INSERT INTO posts_images(index_post, image_url, image_name) VALUES $sqldata_post_images;";
+						//пробуем вставить картинки постов в базу и если проблемы с названием треда то пишем ошибки
+						if ($conn->query($sql_posts_images) === false) {
+							file_put_contents("mysql_error_files.txt", $pathfile."\r\n", FILE_APPEND | LOCK_EX);
+							file_put_contents("mysql_error_files.txt", " - Error: " . $conn->error . "\r\n", FILE_APPEND | LOCK_EX);
+							echo "<p>Error: " . $sql_posts_images . "<br>" . $conn->error . "</p>";
+						}
+					//если в треде отсутствуют картинки пишем ошибки
+					}else{
+						echo "<p>Error: no images</p>";
+						file_put_contents("mysql_error_files.txt", $pathfile."\r\n", FILE_APPEND | LOCK_EX);
+						file_put_contents("mysql_error_files.txt", " - Error: no images\r\n", FILE_APPEND | LOCK_EX);
+					}
 				}
+			//если в треде отсутствуют посты пишем ошибки
 			} else {
 				echo "<p>Error: no posts</p>";
 				file_put_contents("mysql_error_files.txt", $pathfile."\r\n", FILE_APPEND | LOCK_EX);
 				file_put_contents("mysql_error_files.txt", " - Error: no posts\r\n", FILE_APPEND | LOCK_EX);
 			}
 
-			//очистка массивов
+			//очистка всех переменных и освобождение памяти
 			$documentQuery->unloadDocument();
+			unset($documentQuery);
 			unset($file_content);
 			unset($array_all_posts);
 			unset($post_content);
-			unset($documentQuery);
+			unset($mysql_post_ids_values);
+			unset($mysql_post_dates_values);
 			unset($mysql_post_content_values);
-			unset($mysql_threads_names);
 			unset($mysql_post_images_values);
-			unset($sql);
+			unset($sql_posts_contents);
+			unset($sql_posts_images);
+			unset($sql_threads_names);
+			unset($sql_posts_ids);
+			unset($sql_posts_dates);
+			unset($sqldata_threads_names);
 			unset($sqldata_post_content);
 			unset($sqldata_post_images);
+			unset($sqldata_post_ids);
+			unset($sqldata_post_dates);
 			gc_collect_cycles();
-
 		}
-
-		exit("end test");
+		echo "<p>Скрипт закончен.</p>";
 	?>
 </body>
 </html>

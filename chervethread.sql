@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 21, 2020 at 04:18 PM
+-- Generation Time: Nov 22, 2020 at 01:11 AM
 -- Server version: 10.4.14-MariaDB
 -- PHP Version: 7.4.11
 
@@ -39,11 +39,31 @@ CREATE TABLE `dictonary` (
 --
 
 CREATE TABLE `posts_content` (
-  `index_post_content` bigint(20) UNSIGNED NOT NULL,
-  `thread_id` int(11) NOT NULL,
-  `post_id` int(11) NOT NULL,
-  `post_content` text DEFAULT NULL,
-  `post_date` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `index_post` mediumint(8) UNSIGNED NOT NULL,
+  `post_content` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `posts_data`
+--
+
+CREATE TABLE `posts_data` (
+  `index_post` mediumint(8) UNSIGNED NOT NULL,
+  `post_date` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `posts_ids`
+--
+
+CREATE TABLE `posts_ids` (
+  `index_post` mediumint(8) UNSIGNED NOT NULL,
+  `thread_id` mediumint(8) UNSIGNED DEFAULT NULL,
+  `post_id` mediumint(8) UNSIGNED DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------
@@ -53,8 +73,7 @@ CREATE TABLE `posts_content` (
 --
 
 CREATE TABLE `posts_images` (
-  `thread_id` int(11) NOT NULL,
-  `post_id` int(11) NOT NULL,
+  `index_post` mediumint(8) UNSIGNED NOT NULL,
   `image_url` text NOT NULL,
   `image_name` text NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -66,7 +85,7 @@ CREATE TABLE `posts_images` (
 --
 
 CREATE TABLE `threads_name` (
-  `thread_id` int(11) NOT NULL,
+  `thread_id` mediumint(8) UNSIGNED NOT NULL,
   `thread_name` text NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -85,18 +104,25 @@ ALTER TABLE `dictonary`
 -- Indexes for table `posts_content`
 --
 ALTER TABLE `posts_content`
-  ADD UNIQUE KEY `Unique_index_post` (`index_post_content`);
-ALTER TABLE `posts_content` ADD FULLTEXT KEY `search_text` (`post_content`);
+  ADD PRIMARY KEY (`index_post`);
 
 --
--- AUTO_INCREMENT for dumped tables
+-- Indexes for table `posts_data`
 --
+ALTER TABLE `posts_data`
+  ADD PRIMARY KEY (`index_post`);
 
 --
--- AUTO_INCREMENT for table `posts_content`
+-- Indexes for table `posts_ids`
 --
-ALTER TABLE `posts_content`
-  MODIFY `index_post_content` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+ALTER TABLE `posts_ids`
+  ADD PRIMARY KEY (`index_post`);
+
+--
+-- Indexes for table `threads_name`
+--
+ALTER TABLE `threads_name`
+  ADD PRIMARY KEY (`thread_id`);
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
